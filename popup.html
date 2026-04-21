@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FabricLens</title>
+  <link rel="stylesheet" href="styles/popup.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="logo">
+      <span class="logo-icon">🔍</span>
+      <span class="logo-text">FabricLens</span>
+    </div>
+    <span class="version">v1.3</span>
+    <button id="btn-settings" class="btn-settings" title="Settings">⚙️</button>
+  </header>
+
+  <!-- Main content area -->
+  <main id="app">
+    <div id="state-loading" class="state">
+      <div class="spinner"></div>
+      <p class="state-msg">Scanning page...</p>
+    </div>
+
+    <div id="state-no-data" class="state hidden">
+      <div class="empty-icon">🧵</div>
+      <p class="state-msg">No product found on this page.</p>
+      <p class="state-sub">Try image scan to read care labels, or retry if the page is still loading.</p>
+      <div class="scan-options">
+        <button id="btn-image-scan-empty" class="btn-image-scan">🖼️ Scan Images</button>
+        <button id="btn-deep-scan-empty" class="btn-deep-scan">🔬 Retry Scan</button>
+      </div>
+    </div>
+
+    <div id="state-image-scanning" class="state hidden">
+      <div class="spinner"></div>
+      <p class="state-msg">Analyzing product images...</p>
+      <p class="state-sub">Using AI vision to read care labels and tags.</p>
+    </div>
+
+    <div id="state-deep-scanning" class="state hidden">
+      <div class="spinner"></div>
+      <p class="state-msg">Checking page details...</p>
+      <p class="state-sub">This can take a few seconds on some sites.</p>
+    </div>
+
+    <div id="state-product" class="hidden">
+
+      <!-- Product title + retailer -->
+      <div class="product-header">
+        <span class="retailer-badge" id="retailer-badge">—</span>
+        <h2 class="product-title" id="product-title">—</h2>
+        <p class="product-price" id="product-price">—</p>
+      </div>
+
+      <!-- Score ring -->
+      <div class="score-section">
+        <div class="score-ring-wrap">
+          <svg class="score-ring" viewBox="0 0 120 120">
+            <circle class="ring-bg" cx="60" cy="60" r="50"/>
+            <circle class="ring-fill" cx="60" cy="60" r="50" id="ring-fill"/>
+          </svg>
+          <div class="score-inner">
+            <span class="score-grade" id="score-grade">—</span>
+            <span class="score-num" id="score-num">—</span>
+          </div>
+        </div>
+        <div class="score-meta">
+          <p class="score-label" id="score-label">—</p>
+          <p class="score-desc" id="score-desc">—</p>
+        </div>
+      </div>
+
+      <!-- Material breakdown bars -->
+      <div class="materials-section">
+        <h3 class="section-title">Material Breakdown</h3>
+        <div id="material-bars" class="material-bars">
+          <!-- Injected by popup.js -->
+        </div>
+      </div>
+
+      <!-- Raw material text -->
+      <details class="raw-details">
+        <summary>Raw composition text</summary>
+        <p class="raw-text" id="raw-text">—</p>
+      </details>
+
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <button id="btn-rescan" class="btn-rescan">↻ Rescan</button>
+    <button id="btn-deep-scan-footer" class="btn-rescan btn-rescan-alt">🔬 Deep</button>
+    <button id="btn-image-scan-footer" class="btn-rescan btn-rescan-alt">🖼️ Images</button>
+  </footer>
+
+  <script src="scoring.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
