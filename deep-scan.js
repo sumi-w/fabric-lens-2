@@ -886,8 +886,13 @@
     }
     if (good.length > 0) materialText = good.join(" ");
   }
-  // If no percentages but has fiber names, wrap in NO_PCT format
+  // If no percentages but has fiber names, wrap in NO_PCT format.
+  // First try labelScan() as a tiebreaker — it targets "Fabric: Wool/cotton blend"
+  // style patterns and is more precise than broad SPA/DOM scans that may have
+  // returned a large block containing many unrelated fiber mentions.
   else if (materialText && hasFiber(materialText) && !/\d+\s*%/.test(materialText)) {
+    var labelFallback = labelScan();
+    if (labelFallback && hasFiber(labelFallback)) materialText = labelFallback;
     var fibers = extractFiberNamesFromText(materialText);
     if (fibers.length > 0) materialText = "NO_PCT:" + fibers.join(",");
     else materialText = null;
