@@ -100,10 +100,26 @@
 
   var MATERIAL_KEYWORDS = /material|composition|fabric|detail|spec|supplier|about|content|care|beschreibung|matière|composición|zusammensetzung/i;
 
+  // Returns true only for elements safe to click — no navigation, no form submission
+  function isSafeToClick(el) {
+    if (!el) return false;
+    // Never click links or elements inside links (they navigate)
+    if (el.tagName === "A" || el.closest("a[href]")) return false;
+    if (el.getAttribute("href")) return false;
+    // Never click form submit/reset buttons
+    var type = (el.getAttribute("type") || "").toLowerCase();
+    if (type === "submit" || type === "reset") return false;
+    // Never click elements in nav, header, footer (site chrome)
+    if (el.closest("nav, header, footer, [role='navigation'], [role='banner']")) return false;
+    // Never click add-to-cart / checkout / social buttons
+    if (/add to cart|add to bag|buy|checkout|purchase|wishlist|save|share|notify me/i.test(el.textContent)) return false;
+    return true;
+  }
+
   async function clickAccordions() {
     var clicked = 0;
 
-    // Native <details> elements
+    // Native <details> elements — set attribute directly, no click needed
     var detailsEls = document.querySelectorAll("details:not([open])");
     for (var i = 0; i < detailsEls.length; i++) {
       var summary = detailsEls[i].querySelector("summary");
@@ -113,10 +129,10 @@
       }
     }
 
-    // Buttons with aria-expanded="false"
-    var ariaButtons = document.querySelectorAll('button[aria-expanded="false"]');
+    // Collapsed buttons and role="button" elements (covers native <button> and custom div/span triggers)
+    var ariaButtons = document.querySelectorAll('button[aria-expanded="false"], [role="button"][aria-expanded="false"]');
     for (var a = 0; a < ariaButtons.length; a++) {
-      if (MATERIAL_KEYWORDS.test(ariaButtons[a].textContent)) {
+      if (MATERIAL_KEYWORDS.test(ariaButtons[a].textContent) && isSafeToClick(ariaButtons[a])) {
         ariaButtons[a].click();
         clicked++;
       }
@@ -125,27 +141,23 @@
     // Tabs that aren't selected
     var tabs = document.querySelectorAll('[role="tab"][aria-selected="false"]');
     for (var t = 0; t < tabs.length; t++) {
-      if (MATERIAL_KEYWORDS.test(tabs[t].textContent)) {
+      if (MATERIAL_KEYWORDS.test(tabs[t].textContent) && isSafeToClick(tabs[t])) {
         tabs[t].click();
         clicked++;
       }
     }
 
-    // Generic accordion/collapse/expandable elements
+    // Generic accordion/collapse/expandable elements — buttons only, no bare [tabindex] or <a> patterns
     var accordionSelectors = [
       '[class*="accordion"] button', '[class*="accordion"] [role="button"]',
       '[class*="collapse"] button', '[class*="expandable"] button',
-      '[data-toggle="collapse"]', '[data-bs-toggle="collapse"]',
       '[class*="disclosure"] button', '[class*="Disclosure"] button',
       'button[class*="toggle"]', 'button[class*="Toggle"]',
       'button[class*="expand"]', 'button[class*="Expand"]',
-      // Shopify common patterns
       'button[class*="accordion"]', 'button[class*="Accordion"]',
       '.product__accordion button', '.product-accordion button',
       '[class*="product-detail"] button', '[class*="ProductDetail"] button',
-      'summary', // <details> summary elements that might need clicking
-      // Generic clickable elements with material keywords
-      '[tabindex="0"]'
+      'summary'
     ];
 
     for (var s = 0; s < accordionSelectors.length; s++) {
@@ -153,9 +165,9 @@
         var els = document.querySelectorAll(accordionSelectors[s]);
         for (var e = 0; e < els.length; e++) {
           var el = els[e];
+          if (!isSafeToClick(el)) continue;
           var txt = (el.textContent || "").trim();
           if (txt.length < 100 && MATERIAL_KEYWORDS.test(txt)) {
-            // Check if not already expanded
             var expanded = el.getAttribute("aria-expanded");
             if (expanded === "true") continue;
             el.click();
@@ -819,12 +831,27 @@
     }
   }
 
-  // ── PHASE 4: Second round — catch sub-accordions and late-loading content ──
-  // Some sites have nested accordions (e.g., "Details" → "Composition").
-  // The first click round may have revealed new clickable elements.
+  // ── PHASE 4: Second round — click sub-accordions revealed by Phase 3 ──
+  // Phase 3 opens the outer accordion (e.g., "Details & Descriptions").
+  // Phase 4 clicks inner accordions that only appeared after that (e.g., "Materials and Suppliers").
   if (!materialText) {
     var clickCount2 = await clickAccordions();
     if (clickCount2 > 0) {
+      // Increased to 2s — inner accordion may trigger an async content fetch
+      await sleep(2000);
+      try { materialText = scanReactFiber(); } catch(e) {}
+      if (!materialText) materialText = fullDomScan();
+      if (!materialText) materialText = labelScan();
+      if (!materialText) materialText = scanEmbeddedState();
+    }
+  }
+
+  // ── PHASE 4b: Third round — read content exposed by Phase 4 ──
+  // Handles the full 3-level chain: outer section → inner sub-section → composition text.
+  // Phase 3 = click outer, Phase 4 = click inner, Phase 4b = scan the now-visible result.
+  if (!materialText) {
+    var clickCount3 = await clickAccordions();
+    if (clickCount3 > 0) {
       await sleep(1500);
       try { materialText = scanReactFiber(); } catch(e) {}
       if (!materialText) materialText = fullDomScan();
