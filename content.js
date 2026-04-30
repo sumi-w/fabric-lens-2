@@ -284,7 +284,7 @@
     // (div, span, etc.) that don't use the native <details> element.
     // Note: content.js is synchronous so we can't wait for async fetches after clicking;
     // for nested accordions that load content async, deep-scan.js handles the waiting.
-    var ariaEls = document.querySelectorAll('button[aria-expanded="false"], [role="button"][aria-expanded="false"]');
+    var ariaEls = document.querySelectorAll('button[aria-expanded="false"], [role="button"][aria-expanded="false"], button[class*="bg-main-button"]');
     for (var a = 0; a < ariaEls.length; a++) {
       var el = ariaEls[a];
       var txt = (el.textContent || "").trim();

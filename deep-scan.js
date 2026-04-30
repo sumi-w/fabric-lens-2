@@ -138,8 +138,9 @@
       }
     }
 
-    // Tabs that aren't selected
-    var tabs = document.querySelectorAll('[role="tab"][aria-selected="false"]');
+    // Tabs that aren't selected — :not([aria-selected="true"]) catches tabs that
+    // omit the attribute entirely (e.g. COS) as well as explicit aria-selected="false"
+    var tabs = document.querySelectorAll('[role="tab"]:not([aria-selected="true"])');
     for (var t = 0; t < tabs.length; t++) {
       if (MATERIAL_KEYWORDS.test(tabs[t].textContent) && isSafeToClick(tabs[t])) {
         tabs[t].click();
@@ -157,6 +158,7 @@
       'button[class*="accordion"]', 'button[class*="Accordion"]',
       '.product__accordion button', '.product-accordion button',
       '[class*="product-detail"] button', '[class*="ProductDetail"] button',
+      'button[class*="bg-main-button"]', // COS (H&M Group) — no aria-expanded, class-only trigger
       'summary'
     ];
 
