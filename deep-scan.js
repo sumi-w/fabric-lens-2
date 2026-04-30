@@ -26,7 +26,7 @@
     "ecovero","lenzing","refibra","veocel",
     "seacell","smartcel","excel",
     "soy fiber","milk fiber","corn fiber",
-    "pla","ingeo","chitin","chitosan",
+    "ingeo","chitin","chitosan",
     "cotton","linen","flax","hemp","jute","ramie",
     "kapok","bamboo","nettle","kenaf","abaca","sisal","coir",
     "pima cotton","supima","egyptian cotton","sea island cotton",
