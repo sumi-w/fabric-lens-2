@@ -440,6 +440,52 @@
 
   var HOST = window.location.hostname.toLowerCase();
 
+  /** Adidas — targeted scan using article ID from URL to find the right API call */
+  async function adidasApiScan() {
+    if (HOST.indexOf("adidas.com") === -1) return null;
+
+    // Try 1: __NEXT_DATA__ (Adidas uses Next.js)
+    var nextEl = document.querySelector('script#__NEXT_DATA__');
+    if (nextEl) {
+      try {
+        var nd = JSON.parse(nextEl.textContent);
+        var r = deepSearchForComposition(nd, 0);
+        if (r) return r;
+      } catch(e) {}
+    }
+
+    // Try 2: Find performance entries that reference the article ID (e.g. "KA6060")
+    // Targeting by article ID means we only fetch 1-2 product-specific URLs
+    // instead of the 5 generic candidates the broad replay tries.
+    var pathParts = window.location.pathname.replace(/\.html$/, "").split("/").filter(Boolean);
+    var articleId = pathParts[pathParts.length - 1];
+
+    if (articleId && articleId.length >= 4) {
+      try {
+        var entries = performance.getEntriesByType("resource");
+        var skipPattern = /\.(js|css|png|jpg|jpeg|gif|svg|woff|woff2|ttf|ico|webp|avif)(\?|$)/i;
+        for (var i = entries.length - 1; i >= 0; i--) {
+          var url = entries[i].name;
+          if (!url || skipPattern.test(url)) continue;
+          if (url.indexOf(articleId) === -1) continue;
+          try {
+            var resp = await fetch(url, { credentials: "include" });
+            if (!resp.ok) continue;
+            var ct = resp.headers.get("content-type") || "";
+            if (ct.indexOf("json") === -1 && ct.indexOf("text") === -1) continue;
+            var body = await resp.text();
+            if (!hasFiber(body) || body.length > 500000) continue;
+            var json = JSON.parse(body);
+            var comp = deepSearchForComposition(json, 0);
+            if (comp) return comp;
+          } catch(e) {}
+        }
+      } catch(e) {}
+    }
+
+    return null;
+  }
+
   /** COS (H&M Group) — extract from __NEXT_DATA__ or fetch product API */
   async function cosApiScan() {
     if (HOST.indexOf("cos.com") === -1) return null;
@@ -897,7 +943,10 @@
     }
   }
 
-  // ── PHASE 5: Site-specific API fetchers (legacy, last resort) ──
+  // ── PHASE 5: Site-specific API fetchers ──
+  if (!materialText) {
+    try { materialText = await adidasApiScan(); } catch(e) {}
+  }
   if (!materialText) {
     try { materialText = await cosApiScan(); } catch(e) {}
   }
