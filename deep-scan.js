@@ -100,6 +100,9 @@
 
   var MATERIAL_KEYWORDS = /material|composition|fabric|detail|spec|supplier|about|content|care|beschreibung|matière|composición|zusammensetzung/i;
 
+  // Tracks elements already clicked across all phases — prevents re-clicking an open section
+  var _clickedEls = new WeakSet();
+
   // Returns true only for elements safe to click — no navigation, no form submission
   function isSafeToClick(el) {
     if (!el) return false;
@@ -123,8 +126,9 @@
     var detailsEls = document.querySelectorAll("details:not([open])");
     for (var i = 0; i < detailsEls.length; i++) {
       var summary = detailsEls[i].querySelector("summary");
-      if (summary && MATERIAL_KEYWORDS.test(summary.textContent)) {
+      if (summary && MATERIAL_KEYWORDS.test(summary.textContent) && !_clickedEls.has(detailsEls[i])) {
         detailsEls[i].setAttribute("open", "");
+        _clickedEls.add(detailsEls[i]);
         clicked++;
       }
     }
@@ -132,8 +136,10 @@
     // Collapsed buttons and role="button" elements (covers native <button> and custom div/span triggers)
     var ariaButtons = document.querySelectorAll('button[aria-expanded="false"], [role="button"][aria-expanded="false"]');
     for (var a = 0; a < ariaButtons.length; a++) {
+      if (_clickedEls.has(ariaButtons[a])) continue;
       if (MATERIAL_KEYWORDS.test(ariaButtons[a].textContent) && isSafeToClick(ariaButtons[a])) {
         ariaButtons[a].click();
+        _clickedEls.add(ariaButtons[a]);
         clicked++;
       }
     }
@@ -142,8 +148,10 @@
     // omit the attribute entirely (e.g. COS) as well as explicit aria-selected="false"
     var tabs = document.querySelectorAll('[role="tab"]:not([aria-selected="true"])');
     for (var t = 0; t < tabs.length; t++) {
+      if (_clickedEls.has(tabs[t])) continue;
       if (MATERIAL_KEYWORDS.test(tabs[t].textContent) && isSafeToClick(tabs[t])) {
         tabs[t].click();
+        _clickedEls.add(tabs[t]);
         clicked++;
       }
     }
@@ -167,12 +175,14 @@
         var els = document.querySelectorAll(accordionSelectors[s]);
         for (var e = 0; e < els.length; e++) {
           var el = els[e];
+          if (_clickedEls.has(el)) continue; // already clicked in a previous phase
           if (!isSafeToClick(el)) continue;
           var txt = (el.textContent || "").trim();
           if (txt.length < 100 && MATERIAL_KEYWORDS.test(txt)) {
             var expanded = el.getAttribute("aria-expanded");
             if (expanded === "true") continue;
             el.click();
+            _clickedEls.add(el);
             clicked++;
           }
         }
@@ -800,64 +810,88 @@
   // ── PHASE 2: Read data the SPA has already fetched ──
   // React fiber tree — reads component state/props from any API call
   try { materialText = scanReactFiber(); } catch(e) {}
+  if (materialText) console.log("[FabricLens] Phase2 reactFiber:", materialText.substring(0, 120));
 
   // Embedded state objects (__NEXT_DATA__, __NUXT__, etc.)
-  if (!materialText) materialText = scanEmbeddedState();
+  if (!materialText) { materialText = scanEmbeddedState(); if (materialText) console.log("[FabricLens] Phase2 embeddedState:", materialText.substring(0, 120)); }
 
   // Broad window globals (custom SPA state)
   if (!materialText) {
     try { materialText = scanWindowGlobals(); } catch(e) {}
+    if (materialText) console.log("[FabricLens] Phase2 windowGlobals:", materialText.substring(0, 120));
   }
 
   // Full DOM scan (composition may have rendered by now)
-  if (!materialText) materialText = fullDomScan();
+  if (!materialText) { materialText = fullDomScan(); if (materialText) console.log("[FabricLens] Phase2 fullDomScan:", materialText.substring(0, 120)); }
 
   // Label/prose pattern scan
-  if (!materialText) materialText = labelScan();
+  if (!materialText) { materialText = labelScan(); if (materialText) console.log("[FabricLens] Phase2 labelScan:", materialText.substring(0, 120)); }
+
+  console.log("[FabricLens] Phase2 done. materialText:", materialText ? materialText.substring(0, 120) : "null");
 
   // ── PHASE 3: Click accordions to reveal hidden composition ──
-  // Many sites (COS, H&M, ASOS) hide composition behind expandable sections.
-  // These clicks may trigger API calls that load the composition data.
-  if (!materialText) {
+  // Runs even when Phase 2 found something without a percentage — that value may be from the
+  // product title/description; clicking accordions can reveal the real composition with %.
+  // Post-click scans only upgrade materialText if the new result has percentages.
+  if (!materialText || !hasPctFiber(materialText)) {
+    var phase3Pre = materialText;
     var clickCount = await clickAccordions();
+    console.log("[FabricLens] Phase3 clicked:", clickCount, "pre:", phase3Pre ? phase3Pre.substring(0, 80) : "null");
 
     if (clickCount > 0) {
       // Wait for accordion content + any triggered API calls to complete
       await sleep(2000);
 
-      // Re-scan everything after accordion expansion
-      try { materialText = scanReactFiber(); } catch(e) {}
-      if (!materialText) materialText = fullDomScan();
-      if (!materialText) materialText = labelScan();
-      if (!materialText) materialText = scanEmbeddedState();
+      // Re-scan — only upgrade if new result has percentages
+      var scan3 = null;
+      try { scan3 = scanReactFiber(); } catch(e) {}
+      if (!scan3) scan3 = fullDomScan();
+      if (!scan3) scan3 = labelScan();
+      if (!scan3) scan3 = scanEmbeddedState();
+      console.log("[FabricLens] Phase3 scan:", scan3 ? scan3.substring(0, 120) : "null");
+      if (scan3 && hasPctFiber(scan3)) materialText = scan3;
+      else if (scan3 && !phase3Pre) materialText = scan3;
     }
   }
 
   // ── PHASE 4: Second round — click sub-accordions revealed by Phase 3 ──
   // Phase 3 opens the outer accordion (e.g., "Details & Descriptions").
   // Phase 4 clicks inner accordions that only appeared after that (e.g., "Materials and Suppliers").
-  if (!materialText) {
+  // _clickedEls prevents re-clicking the already-open outer panel.
+  if (!materialText || !hasPctFiber(materialText)) {
+    var phase4Pre = materialText;
     var clickCount2 = await clickAccordions();
+    console.log("[FabricLens] Phase4 clicked:", clickCount2, "pre:", phase4Pre ? phase4Pre.substring(0, 80) : "null");
     if (clickCount2 > 0) {
       // Increased to 2s — inner accordion may trigger an async content fetch
       await sleep(2000);
-      try { materialText = scanReactFiber(); } catch(e) {}
-      if (!materialText) materialText = fullDomScan();
-      if (!materialText) materialText = labelScan();
-      if (!materialText) materialText = scanEmbeddedState();
+      var scan4 = null;
+      try { scan4 = scanReactFiber(); } catch(e) {}
+      if (!scan4) scan4 = fullDomScan();
+      if (!scan4) scan4 = labelScan();
+      if (!scan4) scan4 = scanEmbeddedState();
+      console.log("[FabricLens] Phase4 scan:", scan4 ? scan4.substring(0, 120) : "null");
+      if (scan4 && hasPctFiber(scan4)) materialText = scan4;
+      else if (scan4 && !phase4Pre) materialText = scan4;
     }
   }
 
   // ── PHASE 4b: Third round — read content exposed by Phase 4 ──
   // Handles the full 3-level chain: outer section → inner sub-section → composition text.
   // Phase 3 = click outer, Phase 4 = click inner, Phase 4b = scan the now-visible result.
-  if (!materialText) {
+  if (!materialText || !hasPctFiber(materialText)) {
+    var phase4bPre = materialText;
     var clickCount3 = await clickAccordions();
+    console.log("[FabricLens] Phase4b clicked:", clickCount3, "pre:", phase4bPre ? phase4bPre.substring(0, 80) : "null");
     if (clickCount3 > 0) {
       await sleep(1500);
-      try { materialText = scanReactFiber(); } catch(e) {}
-      if (!materialText) materialText = fullDomScan();
-      if (!materialText) materialText = labelScan();
+      var scan4b = null;
+      try { scan4b = scanReactFiber(); } catch(e) {}
+      if (!scan4b) scan4b = fullDomScan();
+      if (!scan4b) scan4b = labelScan();
+      console.log("[FabricLens] Phase4b scan:", scan4b ? scan4b.substring(0, 120) : "null");
+      if (scan4b && hasPctFiber(scan4b)) materialText = scan4b;
+      else if (scan4b && !phase4bPre) materialText = scan4b;
     }
   }
 
@@ -877,6 +911,43 @@
   // ═══════════════════════════════════════════════
   //  CLEAN + RETURN
   // ═══════════════════════════════════════════════
+
+  console.log("[FabricLens] CLEAN start:", materialText ? materialText.substring(0, 200) : "null", "| hasPct:", materialText ? hasPctFiber(materialText) : false);
+
+  // Parse structured JSON composition — e.g. COS React fiber returns:
+  // [{"type":"Shell","materials":[{"material":"Linen","percentage":100,...}]}]
+  // The JSON has no "%" so hasPctFiber misses it. Convert to "Shell: 100% Linen" here.
+  if (materialText && !hasPctFiber(materialText)) {
+    try {
+      var trimmed = materialText.trim();
+      if (trimmed[0] === "[" || trimmed[0] === "{") {
+        var parsed = JSON.parse(trimmed);
+        var sections = Array.isArray(parsed) ? parsed : [parsed];
+        var structuredParts = [];
+        for (var si = 0; si < sections.length; si++) {
+          var sec = sections[si];
+          var prefix = sec.type ? sec.type + ": " : "";
+          var mats = sec.materials || sec.materialDetails || sec.composition || [];
+          if (Array.isArray(mats)) {
+            var secParts = [];
+            for (var mi2 = 0; mi2 < mats.length; mi2++) {
+              var m = mats[mi2];
+              var mName = m.name || m.material || m.fiber || m.materialName || "";
+              var mPct = m.percentage || m.percent || m.pct;
+              if (mName && hasFiber(mName)) {
+                secParts.push(mPct ? mPct + "% " + mName : mName);
+              }
+            }
+            if (secParts.length > 0) structuredParts.push(prefix + secParts.join(", "));
+          }
+        }
+        if (structuredParts.length > 0) {
+          var candidate = structuredParts.join(" | ");
+          if (hasPctFiber(candidate)) materialText = candidate;
+        }
+      }
+    } catch(e) {}
+  }
 
   // Clean: prefer lines with percentages
   if (materialText && hasPctFiber(materialText)) {

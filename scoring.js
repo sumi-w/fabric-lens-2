@@ -104,7 +104,10 @@ const INNOVATIVE_BIO = [
   "bloom foam", "bloom", "seaqual",
   // Recycled natural origin
   "regenerated cotton", "regenerated wool",
-  "refibra", "infinna", "nullarbor"
+  "refibra", "infinna", "nullarbor",
+  // Recycled synthetics — diverts plastic from landfill, lower carbon than virgin
+  "recycled polyester", "recycled nylon", "recycled cotton", "recycled wool",
+  "recycled cashmere", "recycled down", "recycled acrylic"
 ];
 
 // ── GOOD SEMI-SYNTHETIC: More sustainably produced, score = 0.55 ──
@@ -245,6 +248,14 @@ function parseMaterials(text) {
   // Detect format and add commas at material boundaries
 
   var normalized = text;
+
+  // Rewrite "FiberName(pct% Modifier)" → "Modifier FiberName" so modifier words like
+  // "Recycled" become a recognized prefix ("recycled polyester" is in ALL_FIBER_NAMES).
+  // Without this, "(100% Recycled)" inflates pctCount and corrupts comma insertion.
+  normalized = normalized.replace(
+    /(\w+)\s*\(\s*\d+\s*%\s*([a-zA-Z][a-zA-Z\s-]{1,30})\s*\)/g,
+    function(_, fiber, mod) { return mod.trim() + " " + fiber.trim(); }
+  );
 
   // Normalize various separators to commas first: semicolons, pipes, bullet points
   normalized = normalized.replace(/\s*[;|•·]\s*/g, ", ");
