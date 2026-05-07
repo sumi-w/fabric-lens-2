@@ -688,11 +688,7 @@
   }
 
   var _fiberCount = 0;
-  // Bumped from 1000 → 2500: Adidas (and similar) stores material data deep in the fiber
-  // tree, past the point where a rejected false-positive (e.g. product description
-  // containing "lockdown"/"down") was burning budget. Quality filters are unchanged.
-  // Revert to 1000 if you see performance regressions on complex SPAs.
-  var FIBER_LIMIT = 2500;
+  var FIBER_LIMIT = 1000;
 
   function walkFiber(fiber, depth) {
     if (!fiber || depth > 15 || _fiberCount > FIBER_LIMIT) return null;
@@ -742,8 +738,8 @@
       if (apiPattern.test(url)) candidates.push(url);
     }
 
-    // Try the most recent 3 API-looking URLs (reduced from 5 to cap worst-case replay time)
-    candidates = candidates.slice(-3);
+    // Try the most recent 5 API-looking URLs
+    candidates = candidates.slice(-5);
 
     for (var c = 0; c < candidates.length; c++) {
       try {
