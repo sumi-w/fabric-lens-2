@@ -603,7 +603,9 @@
         var key = priorityKeys[pk];
         if (obj[key] !== undefined) {
           if (typeof obj[key] === "string" && obj[key].length > 2 && hasFiber(obj[key])) {
-            return obj[key];
+            // Require % OR short string — long product descriptions containing incidental
+            // fiber words (e.g. "lockdown" containing "down") must not be returned
+            if (hasPctFiber(obj[key]) || obj[key].length < 150) return obj[key];
           }
           if (Array.isArray(obj[key])) {
             // materialDetails: [{name:"Cotton", percentage:"100"}]
@@ -628,7 +630,7 @@
         if (/composit|material|fabric|fibre|fiber/.test(kl)) {
           var val = obj[k];
           if (typeof val === "string" && val.length > 2 && val.length < 2000 && hasFiber(val)) {
-            return val;
+            if (hasPctFiber(val) || val.length < 150) return val;
           }
         }
       }
